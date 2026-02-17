@@ -1,0 +1,27 @@
+name: Render Quran Video
+on:
+  repository_dispatch:
+    types: [render_video]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install FFmpeg
+        run: sudo apt-get install -y ffmpeg
+      - name: Process Video
+        run: |
+          # Download files dari Dropbox yang dikirim n8n
+          curl -L "${{ github.event.client_payload.video_url }}" -o bg.mp4
+          curl -L "${{ github.event.client_payload.audio_url }}" -o audio.mp3
+          
+          # Render: Loop video pemandangan agar sepanjang audio + tambah subtitle
+          ffmpeg -stream_loop -1 -i bg.mp4 -i audio.mp3 -shortest -map 0:v:0 -map 1:a:0 -y final.mp4
+          
+      - name: Upload to Dropbox
+        run: |
+          # Script sederhana upload balik ke Dropbox kamu pakai API
+          curl -X POST https://content.dropboxapi.com/2/files/upload \
+            --header "Authorization: Bearer ${{ github.event.client_payload.dbx_token }}" \
+            --header "Content-Type: application/octet-stream" \
+            --header "Dropbox-API-Arg: {\"path\": \"/postingan/video-ngaji-${{ github.event.client_payload.ayah_id }}.mp4\",\"mode\": \"overwrite\"}" \
+            --data-binary @final.mp4
