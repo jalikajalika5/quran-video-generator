@@ -1,25 +1,42 @@
 name: Render Quran Video
+
 on:
   repository_dispatch:
     types: [render_video]
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - name: Install FFmpeg
-        run: sudo apt-get install -y ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Debug Data Masuk (Cek URL)
+        run: |
+          echo "=== DATA DARI N8N ==="
+          echo "Video URL: ${{ github.event.client_payload.video_url }}"
+          echo "Audio URL: ${{ github.event.client_payload.audio_url }}"
+          echo "Ayat ID: ${{ github.event.client_payload.ayah_id }}"
+          echo "======================="
+
       - name: Process Video
         run: |
-          # Download files dari Dropbox yang dikirim n8n
+          # Download Video (dengan penanganan error jika URL kosong)
+          if [ -z "${{ github.event.client_payload.video_url }}" ]; then
+            echo "ERROR: URL Video Kosong! Cek Node Pexels di n8n."
+            exit 1
+          fi
+          
           curl -L "${{ github.event.client_payload.video_url }}" -o bg.mp4
           curl -L "${{ github.event.client_payload.audio_url }}" -o audio.mp3
           
-          # Render: Loop video pemandangan agar sepanjang audio + tambah subtitle
-          ffmpeg -stream_loop -1 -i bg.mp4 -i audio.mp3 -shortest -map 0:v:0 -map 1:a:0 -y final.mp4
-          
+          # Render: Loop video pemandangan agar sepanjang audio
+          # Menambahkan -shortest agar durasi video mengikuti durasi audio (mp3)
+          ffmpeg -stream_loop -1 -i bg.mp4 -i audio.mp3 -c:v libx264 -tune stillimage -c:a copy -shortest -y final.mp4
+
       - name: Upload to Dropbox
         run: |
-          # Script sederhana upload balik ke Dropbox kamu pakai API
+          # Upload balik ke Dropbox
           curl -X POST https://content.dropboxapi.com/2/files/upload \
             --header "Authorization: Bearer ${{ github.event.client_payload.dbx_token }}" \
             --header "Content-Type: application/octet-stream" \
